@@ -53,6 +53,14 @@
             color: #333;
         }
 
+        .deal-description {
+            color: #555;
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.4;
+            font-style: italic;
+        }
+
         .store {
             color: #666;
             margin-bottom: 8px;
@@ -155,7 +163,7 @@
 
     <script>
         // 📝 REPLACE THIS WITH YOUR GOOGLE SHEETS URL
-        // Make sure your sheet is public and has columns: title, store, current_price, original_price, deal_url
+        // Make sure your sheet is public and has columns: title, description, store, current_price, original_price, deal_url
         const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1uaBi90r1B1ON6YZtf74zGrwbwAAYwiDCQS769ReEdjI/edit#gid=0';
 
         function calculateDiscount(currentPrice, originalPrice) {
@@ -168,10 +176,11 @@
             return `
                 <div class="deal">
                     <div class="deal-title">${deal.title}</div>
+                    ${deal.description ? `<div class="deal-description">"${deal.description}"</div>` : ''}
                     <div class="store">📍 ${deal.store}</div>
                     <div class="price">
-                        <span class="current-price">$${parseFloat(deal.current_price).toFixed(2)}</span>
-                        <span class="original-price">$${parseFloat(deal.original_price).toFixed(2)}</span>
+                        <span class="current-price">${parseFloat(deal.current_price).toFixed(2)}</span>
+                        <span class="original-price">${parseFloat(deal.original_price).toFixed(2)}</span>
                         <span class="discount">${discount}% OFF</span>
                     </div>
                     <a href="${deal.deal_url || '#'}" class="deal-link" target="_blank">🛒 View Deal →</a>
