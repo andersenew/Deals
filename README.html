@@ -238,9 +238,15 @@
                     contentDiv.innerHTML = `
                         <div class="error">
                             <strong>No deals found!</strong><br>
-                            Make sure your Google Sheet has data with headers containing these words:<br>
-                            <code>title | description | store | price | original | url</code><br>
-                            Check the browser console (F12) for debugging info.
+                            <strong>Debug Info:</strong><br>
+                            • CSV data received: ${csvText ? 'Yes' : 'No'}<br>
+                            • Number of lines: ${csvText.split('\n').length}<br>
+                            • First line (headers): ${csvText.split('\n')[0]}<br><br>
+                            Make sure your Google Sheet has:<br>
+                            1. Headers containing these words: <code>title, description, store, price, original, url</code><br>
+                            2. At least one row of data below the headers<br>
+                            3. Numeric values in price columns<br><br>
+                            Open browser console (F12) for detailed parsing info.
                         </div>
                     `;
                     return;
@@ -266,30 +272,79 @@
         }
 
         function parseCSV(csvText) {
+            console.log('=== CSV PARSING DEBUG ===');
+            console.log('Raw CSV text:', csvText.substring(0, 500) + '...');
+            
             const lines = csvText.trim().split('\n');
-            if (lines.length < 2) return [];
+            console.log('Number of lines:', lines.length);
+            
+            if (lines.length < 2) {
+                console.log('ERROR: Less than 2 lines found');
+                return [];
+            }
 
             const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
             console.log('Headers found:', headers);
+            console.log('First data line:', lines[1]);
 
             const deals = [];
             
-            // Find column indices
-            const titleIndex = headers.findIndex(h => h.includes('title'));
+            // Find column indices with more flexible matching
+            const titleIndex = headers.findIndex(h => h.includes('title') || h.includes('product') || h.includes('name'));
             const descIndex = headers.findIndex(h => h.includes('description') || h.includes('desc'));
-            const storeIndex = headers.findIndex(h => h.includes('store'));
-            const currentPriceIndex = headers.findIndex(h => h.includes('current') || h.includes('sale') || h.includes('price'));
-            const originalPriceIndex = headers.findIndex(h => h.includes('original') || h.includes('regular') || h.includes('was'));
-            const urlIndex = headers.findIndex(h => h.includes('url') || h.includes('link'));
+            const storeIndex = headers.findIndex(h => h.includes('store') || h.includes('shop') || h.includes('retailer'));
+            const currentPriceIndex = headers.findIndex(h => 
+                h.includes('current') || h.includes('sale') || h.includes('price') && !h.includes('original')
+            );
+            const originalPriceIndex = headers.findIndex(h => 
+                h.includes('original') || h.includes('regular') || h.includes('was') || 
+                (h.includes('price') && h.includes('original'))
+            );
+            const urlIndex = headers.findIndex(h => h.includes('url') || h.includes('link') || h.includes('deal'));
 
-            console.log('Column indices:', { titleIndex, descIndex, storeIndex, currentPriceIndex, originalPriceIndex, urlIndex });
+            console.log('Column indices found:', { 
+                titleIndex, descIndex, storeIndex, currentPriceIndex, originalPriceIndex, urlIndex 
+            });
+            
+            // If we can't find essential columns, try positional parsing as fallback
+            let usePositional = false;
+            if (titleIndex === -1 || storeIndex === -1 || currentPriceIndex === -1 || originalPriceIndex === -1) {
+                console.log('Could not find all columns by name, trying positional parsing...');
+                usePositional = true;
+            }
             
             for (let i = 1; i < lines.length; i++) {
                 const values = parseCSVLine(lines[i]);
                 console.log(`Row ${i} values:`, values);
                 
-                if (values.length >= 4 && titleIndex >= 0 && storeIndex >= 0 && currentPriceIndex >= 0 && originalPriceIndex >= 0) {
-                    const deal = {
+                let deal;
+                
+                if (usePositional && values.length >= 4) {
+                    // Try positional parsing - with or without description
+                    if (values.length >= 6) {
+                        // Format: title, description, store, current_price, original_price, url
+                        deal = {
+                            title: (values[0] || '').trim(),
+                            description: (values[1] || '').trim(),
+                            store: (values[2] || 'Unknown Store').trim(),
+                            current_price: parseFloat(values[3]) || 0,
+                            original_price: parseFloat(values[4]) || 0,
+                            deal_url: (values[5] || '#').trim()
+                        };
+                    } else if (values.length >= 5) {
+                        // Format: title, store, current_price, original_price, url (no description)
+                        deal = {
+                            title: (values[0] || '').trim(),
+                            description: '',
+                            store: (values[1] || 'Unknown Store').trim(),
+                            current_price: parseFloat(values[2]) || 0,
+                            original_price: parseFloat(values[3]) || 0,
+                            deal_url: (values[4] || '#').trim()
+                        };
+                    }
+                } else if (!usePositional && titleIndex >= 0 && storeIndex >= 0 && currentPriceIndex >= 0 && originalPriceIndex >= 0) {
+                    // Use column-based parsing
+                    deal = {
                         title: (values[titleIndex] || '').trim(),
                         description: descIndex >= 0 ? (values[descIndex] || '').trim() : '',
                         store: (values[storeIndex] || 'Unknown Store').trim(),
@@ -297,14 +352,25 @@
                         original_price: parseFloat(values[originalPriceIndex]) || 0,
                         deal_url: urlIndex >= 0 ? (values[urlIndex] || '#').trim() : '#'
                     };
-                    
+                }
+                
+                if (deal) {
+                    console.log(`Processing deal:`, deal);
                     if (deal.title && deal.title !== '' && deal.current_price > 0 && deal.original_price > 0) {
                         deals.push(deal);
+                        console.log(`✅ Added deal: ${deal.title}`);
+                    } else {
+                        console.log(`❌ Rejected deal - missing data:`, {
+                            hasTitle: !!deal.title,
+                            currentPrice: deal.current_price,
+                            originalPrice: deal.original_price
+                        });
                     }
                 }
             }
 
-            console.log('Parsed deals:', deals);
+            console.log('Final parsed deals:', deals);
+            console.log('=== END CSV PARSING DEBUG ===');
             return deals;
         }
 
