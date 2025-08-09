@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deals List</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            border: 1px solid #e57373;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            color: #c62828;
+        }
+
+        .deal {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .deal:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .deal-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .store {
+            color: #666;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .price {
+            margin-bottom: 10px;
+        }
+
+        .current-price {
+            font-size: 20px;
+            font-weight: bold;
+            color: #d9534f;
+        }
+
+        .original-price {
+            text-decoration: line-through;
+            color: #999;
+            margin-left: 10px;
+        }
+
+        .discount {
+            background-color: #d9534f;
+            color: white;
+            padding: 3px 8px;
+            margin-left: 10px;
+            font-size: 14px;
+            border-radius: 4px;
+        }
+
+        .deal-link {
+            color: #337ab7;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .deal-link:hover {
+            text-decoration: underline;
+        }
+
+        .deals-count {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        .refresh-note {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+            font-style: italic;
+        }
+
+        .refresh-button {
+            display: block;
+            margin: 20px auto;
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .refresh-button:hover {
+            background: #1976d2;
+        }
+
+        .header-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-section">
+        <h1>🔥 Today's Hot Deals</h1>
+        <button class="refresh-button" onclick="loadDeals()">🔄 Refresh Deals</button>
+    </div>
+
+    <div id="lastUpdated" class="last-updated"></div>
+
+    <!-- Content Area -->
+    <div id="content">
+        <div class="loading">
+            <p>Loading today's best deals...</p>
+        </div>
+    </div>
+
+    <script>
+        // 📝 REPLACE THIS WITH YOUR GOOGLE SHEETS URL
+        // Make sure your sheet is public and has columns: title, store, current_price, original_price, deal_url
+        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1uaBi90r1B1ON6YZtf74zGrwbwAAYwiDCQS769ReEdjI/edit#gid=0';
+
+        function calculateDiscount(currentPrice, originalPrice) {
+            return Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+        }
+
+        function createDealHTML(deal) {
+            const discount = calculateDiscount(deal.current_price, deal.original_price);
+            
+            return `
+                <div class="deal">
+                    <div class="deal-title">${deal.title}</div>
+                    <div class="store">📍 ${deal.store}</div>
+                    <div class="price">
+                        <span class="current-price">$${parseFloat(deal.current_price).toFixed(2)}</span>
+                        <span class="original-price">$${parseFloat(deal.original_price).toFixed(2)}</span>
+                        <span class="discount">${discount}% OFF</span>
+                    </div>
+                    <a href="${deal.deal_url || '#'}" class="deal-link" target="_blank">🛒 View Deal →</a>
+                </div>
+            `;
+        }
+
+        function convertGoogleSheetsURL(url) {
+            // Convert sharing URL to CSV export URL
+            if (url.includes('/d/') && url.includes('edit')) {
+                const sheetId = url.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
+                return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+            }
+            return url;
+        }
+
+        async function loadDeals() {
+            const contentDiv = document.getElementById('content');
+            const lastUpdatedDiv = document.getElementById('lastUpdated');
+            
+            if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes('YOUR_SHEET_ID_HERE')) {
+                contentDiv.innerHTML = `
+                    <div class="error">
+                        <strong>⚠️ Configuration Required</strong><br>
+                        Please update the GOOGLE_SHEET_URL in the code with your actual Google Sheets URL.<br><br>
+                        <strong>Steps:</strong><br>
+                        1. Create a Google Sheet with columns: title, store, current_price, original_price, deal_url<br>
+                        2. Make it public (Share → Anyone with the link → Viewer)<br>
+                        3. Copy the URL and replace the GOOGLE_SHEET_URL in the code
+                    </div>
+                `;
+                return;
+            }
+
+            // Show loading
+            contentDiv.innerHTML = '<div class="loading">🔄 Fetching latest deals...</div>';
+
+            try {
+                const csvUrl = convertGoogleSheetsURL(GOOGLE_SHEET_URL);
+                console.log('Fetching from:', csvUrl);
+
+                const response = await fetch(csvUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: Cannot access the Google Sheet. Make sure it's public!`);
+                }
+
+                const csvText = await response.text();
+                console.log('CSV Response:', csvText.substring(0, 200) + '...');
+
+                const deals = parseCSV(csvText);
+                
+                if (deals.length === 0) {
+                    contentDiv.innerHTML = `
+                        <div class="error">
+                            <strong>No deals found!</strong><br>
+                            Make sure your Google Sheet has data with the correct column names:<br>
+                            <code>title | store | current_price | original_price | deal_url</code>
+                        </div>
+                    `;
+                    return;
+                }
+
+                displayDeals(deals);
+                lastUpdatedDiv.innerHTML = `Last updated: ${new Date().toLocaleString()}`;
+
+            } catch (error) {
+                console.error('Error:', error);
+                contentDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error loading deals:</strong><br>
+                        ${error.message}<br><br>
+                        <strong>Common solutions:</strong><br>
+                        • Make sure the Google Sheet is public<br>
+                        • Check that the URL is correct<br>
+                        • Verify column names match expected format<br>
+                        • Try refreshing the page
+                    </div>
+                `;
+            }
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            console.log('Headers found:', headers);
+
+            const deals = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                
+                if (values.length >= 4) {
+                    const deal = {
+                        title: values[0] || 'No Title',
+                        store: values[1] || 'Unknown Store',
+                        current_price: parseFloat(values[2]) || 0,
+                        original_price: parseFloat(values[3]) || 0,
+                        deal_url: values[4] || '#'
+                    };
+                    
+                    if (deal.title && deal.title !== 'No Title' && deal.current_price > 0) {
+                        deals.push(deal);
+                    }
+                }
+            }
+
+            console.log('Parsed deals:', deals);
+            return deals;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"' && (i === 0 || line[i-1] === ',')) {
+                    inQuotes = true;
+                } else if (char === '"' && inQuotes && (i === line.length - 1 || line[i+1] === ',')) {
+                    inQuotes = false;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            result.push(current.trim());
+            return result.map(item => item.replace(/^"|"$/g, ''));
+        }
+
+        function displayDeals(deals) {
+            const contentDiv = document.getElementById('content');
+            
+            // Sort deals by discount percentage (highest first)
+            deals.sort((a, b) => {
+                const discountA = calculateDiscount(a.current_price, a.original_price);
+                const discountB = calculateDiscount(b.current_price, b.original_price);
+                return discountB - discountA;
+            });
+            
+            let dealsHTML = `
+                <div class="deals-count">✅ Found ${deals.length} amazing deals!</div>
+            `;
+            
+            deals.forEach(deal => {
+                dealsHTML += createDealHTML(deal);
+            });
+            
+            dealsHTML += `
+                <div class="refresh-note">
+                    💡 Deals are automatically sorted by discount percentage
+                </div>
+            `;
+            
+            contentDiv.innerHTML = dealsHTML;
+        }
+
+        // Auto-load deals when page loads
+        window.addEventListener('load', function() {
+            loadDeals();
+        });
+
+        // Auto-refresh every 5 minutes
+        setInterval(loadDeals, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
