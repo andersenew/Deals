@@ -207,9 +207,10 @@
                         <strong>⚠️ Configuration Required</strong><br>
                         Please update the GOOGLE_SHEET_URL in the code with your actual Google Sheets URL.<br><br>
                         <strong>Steps:</strong><br>
-                        1. Create a Google Sheet with columns: title, store, current_price, original_price, deal_url<br>
+                        1. Create a Google Sheet with columns containing these words: title, description, store, current_price (or price), original_price, deal_url (or link)<br>
                         2. Make it public (Share → Anyone with the link → Viewer)<br>
-                        3. Copy the URL and replace the GOOGLE_SHEET_URL in the code
+                        3. Copy the URL and replace the GOOGLE_SHEET_URL in the code<br><br>
+                        <strong>Example headers:</strong> Title | Description | Store | Current Price | Original Price | Deal URL
                     </div>
                 `;
                 return;
@@ -237,8 +238,9 @@
                     contentDiv.innerHTML = `
                         <div class="error">
                             <strong>No deals found!</strong><br>
-                            Make sure your Google Sheet has data with the correct column names:<br>
-                            <code>title | store | current_price | original_price | deal_url</code>
+                            Make sure your Google Sheet has data with headers containing these words:<br>
+                            <code>title | description | store | price | original | url</code><br>
+                            Check the browser console (F12) for debugging info.
                         </div>
                     `;
                     return;
@@ -267,24 +269,36 @@
             const lines = csvText.trim().split('\n');
             if (lines.length < 2) return [];
 
-            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
             console.log('Headers found:', headers);
 
             const deals = [];
             
+            // Find column indices
+            const titleIndex = headers.findIndex(h => h.includes('title'));
+            const descIndex = headers.findIndex(h => h.includes('description') || h.includes('desc'));
+            const storeIndex = headers.findIndex(h => h.includes('store'));
+            const currentPriceIndex = headers.findIndex(h => h.includes('current') || h.includes('sale') || h.includes('price'));
+            const originalPriceIndex = headers.findIndex(h => h.includes('original') || h.includes('regular') || h.includes('was'));
+            const urlIndex = headers.findIndex(h => h.includes('url') || h.includes('link'));
+
+            console.log('Column indices:', { titleIndex, descIndex, storeIndex, currentPriceIndex, originalPriceIndex, urlIndex });
+            
             for (let i = 1; i < lines.length; i++) {
                 const values = parseCSVLine(lines[i]);
+                console.log(`Row ${i} values:`, values);
                 
-                if (values.length >= 4) {
+                if (values.length >= 4 && titleIndex >= 0 && storeIndex >= 0 && currentPriceIndex >= 0 && originalPriceIndex >= 0) {
                     const deal = {
-                        title: values[0] || 'No Title',
-                        store: values[1] || 'Unknown Store',
-                        current_price: parseFloat(values[2]) || 0,
-                        original_price: parseFloat(values[3]) || 0,
-                        deal_url: values[4] || '#'
+                        title: (values[titleIndex] || '').trim(),
+                        description: descIndex >= 0 ? (values[descIndex] || '').trim() : '',
+                        store: (values[storeIndex] || 'Unknown Store').trim(),
+                        current_price: parseFloat(values[currentPriceIndex]) || 0,
+                        original_price: parseFloat(values[originalPriceIndex]) || 0,
+                        deal_url: urlIndex >= 0 ? (values[urlIndex] || '#').trim() : '#'
                     };
                     
-                    if (deal.title && deal.title !== 'No Title' && deal.current_price > 0) {
+                    if (deal.title && deal.title !== '' && deal.current_price > 0 && deal.original_price > 0) {
                         deals.push(deal);
                     }
                 }
